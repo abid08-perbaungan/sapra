@@ -3,9 +3,27 @@ include '../config/koneksi.php';
 
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
-if($_SESSION['role'] != 'admin'){ header("Location: ../index.php"); exit; }
+if(!isset($_SESSION['role']) || $_SESSION['role'] != 'admin'){ 
+    header("Location: ../index.php"); 
+    exit; 
+}
 
-// PROSES TERIMA BARANG (DENGAN DENDA)
+// 1. PROSES SETUJUI (Dari MENUNGGU ke DIPINJAM)
+if(isset($_GET['aksi']) && $_GET['aksi'] == 'setujui'){
+    $id = $_GET['id'];
+    $cek = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM peminjaman WHERE id_peminjaman='$id'"));
+    $jml = $cek['jumlah'];
+    $alat = $cek['id_alat'];
+    
+    // Kita set ke 'disetujui' (atau sesuaikan dengan string di DB kamu)
+    mysqli_query($conn, "UPDATE peminjaman SET status='disetujui' WHERE id_peminjaman='$id'");
+    mysqli_query($conn, "UPDATE alat SET stok = stok - $jml WHERE id_alat='$alat'");
+    
+    header("Location: konfirmasi_pinjam.php?msg=approved");
+    exit;
+}
+
+// 2. PROSES TERIMA (Dari DIAJUKAN_KEMBALI ke KEMBALI)
 if(isset($_POST['konfirmasi_terima'])){
     $id = $_POST['id_peminjaman'];
     $denda_rusak = $_POST['denda_rusak']; 
@@ -19,8 +37,10 @@ if(isset($_POST['konfirmasi_terima'])){
     $denda_telat = 0;
     
     if($tgl_sekarang > $tgl_deadline){
-        $days = (new DateTime($tgl_sekarang))->diff(new DateTime($tgl_deadline))->days;
-        $denda_telat = $days * 10000;
+        $tgl1 = new DateTime($tgl_deadline);
+        $tgl2 = new DateTime($tgl_sekarang);
+        $jarak = $tgl2->diff($tgl1);
+        $denda_telat = $jarak->days * 10000;
     }
 
     mysqli_query($conn, "UPDATE peminjaman SET status='kembali' WHERE id_peminjaman='$id'");
@@ -28,19 +48,8 @@ if(isset($_POST['konfirmasi_terima'])){
     mysqli_query($conn, "INSERT INTO pengembalian (id_peminjaman, tgl_kembali_real, denda, denda_rusak) 
                          VALUES ('$id', '$tgl_sekarang', '$denda_telat', '$denda_rusak')");
     
-    header("Location: konfirmasi_pinjam.php?msg=success_return");
-}
-
-// PROSES SETUJUI PEMINJAMAN
-if(isset($_GET['aksi']) && $_GET['aksi'] == 'setujui'){
-    $id = $_GET['id'];
-    $cek = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM peminjaman WHERE id_peminjaman='$id'"));
-    $jml = $cek['jumlah'];
-    $alat = $cek['id_alat'];
-    
-    mysqli_query($conn, "UPDATE peminjaman SET status='disetujui' WHERE id_alat='$id'");
-    mysqli_query($conn, "UPDATE alat SET stok = stok - $jml WHERE id_alat='$alat'");
-    header("Location: konfirmasi_pinjam.php?msg=success_approve");
+    header("Location: konfirmasi_pinjam.php?msg=returned");
+    exit;
 }
 ?>
 
@@ -55,21 +64,18 @@ if(isset($_GET['aksi']) && $_GET['aksi'] == 'setujui'){
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
         .main-card { border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        .table thead { background-color: #f1f3f5; }
         .badge-status { font-size: 11px; text-transform: uppercase; padding: 6px 12px; border-radius: 50px; }
-        .btn-action { border-radius: 8px; font-weight: 600; }
-        .img-preview { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; cursor: pointer; transition: 0.2s; }
-        .img-preview:hover { transform: scale(1.1); }
+        .img-preview { width: 45px; height: 45px; object-fit: cover; border-radius: 8px; border: 1px solid #dee2e6; }
     </style>
 </head>
-<body class="p-lg-4">
+<body class="p-4">
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h3 class="fw-bold mb-0">Verifikasi Transaksi</h3>
-                <p class="text-muted">Kelola persetujuan pinjam dan validasi pengembalian alat.</p>
+                <p class="text-muted">Kelola persetujuan pinjam dan konfirmasi barang kembali.</p>
             </div>
-            <a href="dashboard.php" class="btn btn-outline-secondary btn-action shadow-sm">
+            <a href="dashboard.php" class="btn btn-outline-secondary shadow-sm">
                 <i class="bi bi-house-door me-1"></i> Dashboard
             </a>
         </div>
@@ -84,7 +90,7 @@ if(isset($_GET['aksi']) && $_GET['aksi'] == 'setujui'){
                                 <th>ALAT</th>
                                 <th class="text-center">QTY</th>
                                 <th>STATUS</th>
-                                <th>VALIDASI USER</th>
+                                <th>FOTO BUKTI</th>
                                 <th class="text-center">AKSI ADMIN</th>
                             </tr>
                         </thead>
@@ -94,15 +100,18 @@ if(isset($_GET['aksi']) && $_GET['aksi'] == 'setujui'){
                                                     JOIN users u ON p.id_user=u.id_user 
                                                     JOIN alat a ON p.id_alat=a.id_alat 
                                                     ORDER BY p.id_peminjaman DESC");
-                            while($r = mysqli_fetch_array($q)): ?>
+                            while($r = mysqli_fetch_array($q)): 
+                                // NORMALISASI STATUS (Ubah ke huruf kecil semua untuk pengecekan)
+                                $status_cek = strtolower($r['status']);
+                            ?>
                             <tr>
                                 <td class="ps-4">
                                     <div class="fw-bold text-dark"><?= $r['nama'] ?></div>
-                                    <small class="text-muted">ID: #PR-<?= $r['id_peminjaman'] ?></small>
+                                    <small class="text-muted">ID: #INV-<?= $r['id_peminjaman'] ?></small>
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center">
-                                        <img src="../uploads/<?= $r['gbr_alat'] ?>" class="img-preview me-2 border">
+                                        <img src="../uploads/<?= $r['gbr_alat'] ?>" class="img-preview me-2">
                                         <span class="small fw-semibold"><?= $r['nama_alat'] ?></span>
                                     </div>
                                 </td>
@@ -110,47 +119,41 @@ if(isset($_GET['aksi']) && $_GET['aksi'] == 'setujui'){
                                 <td>
                                     <?php 
                                         $badge = "bg-secondary";
-                                        if($r['status'] == 'pending') $badge = "bg-warning text-dark";
-                                        if($r['status'] == 'disetujui') $badge = "bg-primary";
-                                        if($r['status'] == 'diajukan_kembali') $badge = "bg-info text-dark";
-                                        if($r['status'] == 'kembali') $badge = "bg-success";
+                                        if($status_cek == 'menunggu' || $status_cek == 'pending') $badge = "bg-warning text-dark";
+                                        if($status_cek == 'disetujui') $badge = "bg-primary";
+                                        if($status_cek == 'diajukan_kembali') $badge = "bg-info text-dark";
+                                        if($status_cek == 'kembali' || $status_cek == 'selesai') $badge = "bg-success";
                                     ?>
-                                    <span class="badge badge-status <?= $badge ?>"><?= str_replace('_', ' ', $r['status']) ?></span>
+                                    <span class="badge badge-status <?= $badge ?>"><?= $r['status'] ?></span>
                                 </td>
                                 <td>
-                                    <?php if($r['status'] == 'diajukan_kembali'): ?>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <a href="../uploads/<?= $r['foto_bukti'] ?>" target="_blank">
-                                                <img src="../uploads/<?= $r['foto_bukti'] ?>" class="img-preview shadow-sm" title="Klik untuk perbesar">
-                                            </a>
-                                            <span class="badge <?= ($r['kondisi_kembali'] == 'aman') ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' ?> border">
-                                                <?= strtoupper($r['kondisi_kembali']) ?>
-                                            </span>
-                                        </div>
+                                    <?php if($r['foto_bukti']): ?>
+                                        <a href="../uploads/<?= $r['foto_bukti'] ?>" target="_blank">
+                                            <img src="../uploads/<?= $r['foto_bukti'] ?>" class="img-preview shadow-sm">
+                                        </a>
+                                        <span class="badge bg-light text-dark border ms-1"><?= strtoupper($r['kondisi_kembali']) ?></span>
                                     <?php else: ?>
                                         <span class="text-muted small">-</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-center pe-4">
-                                    <?php if($r['status'] == 'pending'): ?>
-                                        <a href="?aksi=setujui&id=<?= $r['id_peminjaman'] ?>" class="btn btn-success btn-sm btn-action w-100 py-2">
-                                            <i class="bi bi-check-circle me-1"></i> Setujui Pinjam
+                                    <?php if($status_cek == 'menunggu' || $status_cek == 'pending'): ?>
+                                        <a href="?aksi=setujui&id=<?= $r['id_peminjaman'] ?>" class="btn btn-success btn-sm px-3 fw-bold shadow-sm">
+                                            <i class="bi bi-check2-circle me-1"></i> Setujui
                                         </a>
                                     
-                                    <?php elseif($r['status'] == 'diajukan_kembali'): ?>
-                                        <form method="POST" class="d-flex gap-2 justify-content-center">
+                                    <?php elseif($status_cek == 'disetujui'): ?>
+                                        <small class="text-muted italic"><i class="bi bi-truck me-1"></i> Sedang Dipinjam</small>
+
+                                    <?php elseif($status_cek == 'diajukan_kembali'): ?>
+                                        <form method="POST" class="d-flex gap-1 justify-content-center">
                                             <input type="hidden" name="id_peminjaman" value="<?= $r['id_peminjaman'] ?>">
-                                            <div class="input-group input-group-sm" style="width: 180px;">
-                                                <span class="input-group-text">Rp</span>
-                                                <input type="number" name="denda_rusak" class="form-control" placeholder="Denda Rusak" value="0">
-                                            </div>
-                                            <button type="submit" name="konfirmasi_terima" class="btn btn-primary btn-sm btn-action">
-                                                Konfirmasi
-                                            </button>
+                                            <input type="number" name="denda_rusak" class="form-control form-control-sm" placeholder="Denda" value="0" style="width: 80px;">
+                                            <button type="submit" name="konfirmasi_terima" class="btn btn-primary btn-sm fw-bold">Terima</button>
                                         </form>
                                     
                                     <?php else: ?>
-                                        <span class="text-muted small"><i class="bi bi-check-all text-success"></i> Selesai</span>
+                                        <i class="bi bi-check-all text-success fs-5"></i>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -161,7 +164,5 @@ if(isset($_GET['aksi']) && $_GET['aksi'] == 'setujui'){
             </div>
         </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
