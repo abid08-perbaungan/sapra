@@ -5,15 +5,16 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-if($_SESSION['role'] != 'admin'){ 
+// Proteksi: Hanya Admin (Petugas) dan Super Admin yang bisa masuk
+if(!isset($_SESSION['role']) || ($_SESSION['role'] != 'admin' && $_SESSION['role'] != 'super_admin')){ 
     header("Location: ../index.php"); 
     exit;
 } 
 
-// Ambil data statistik sederhana untuk dashboard
+// Ambil data statistik (Gunakan TRIM dan UPPER untuk menghindari bug typo status di DB)
 $total_alat = mysqli_num_rows(mysqli_query($conn, "SELECT id_alat FROM alat"));
-$total_pending = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM peminjaman WHERE status='pending'"));
-$total_pinjam = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM peminjaman WHERE status='disetujui'"));
+$total_pending = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM peminjaman WHERE TRIM(UPPER(status))='PENDING' OR TRIM(UPPER(status))='MENUNGGU'"));
+$total_pinjam = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM peminjaman WHERE TRIM(UPPER(status))='DISETUJUI'"));
 ?>
 
 <!DOCTYPE html>
@@ -87,6 +88,15 @@ $total_pinjam = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM p
             font-weight: 600;
             padding: 10px 20px;
         }
+
+        .badge-role {
+            font-size: 0.7rem;
+            vertical-align: middle;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 5px;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
@@ -114,10 +124,10 @@ $total_pinjam = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM p
         
         <div class="welcome-section d-flex justify-content-between align-items-center">
             <div>
-                <h2 class="fw-bold mb-1">Halo, Admin <?= $_SESSION['nama'] ?>! 👋</h2>
-                <p class="mb-0 opacity-75">Kelola data alat dan konfirmasi peminjaman hari ini.</p>
+                <h2 class="fw-bold mb-1">Halo, <?= $_SESSION['nama'] ?>! 👋 <span class="badge-role"><?= $_SESSION['role'] ?></span></h2>
+                <p class="mb-0 opacity-75">Sistem Manajemen Rental - Pantau data dan transaksi dengan mudah.</p>
             </div>
-            <i class="bi bi-person-check fs-1 opacity-25"></i>
+            <i class="bi bi-person-badge fs-1 opacity-25"></i>
         </div>
 
         <div class="row mb-4">
@@ -158,7 +168,7 @@ $total_pinjam = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM p
                             <i class="bi bi-tools" style="font-size: 3rem;"></i>
                         </div>
                         <h4 class="fw-bold text-dark">Manajemen Alat</h4>
-                        <p class="text-muted px-3">Atur katalog alat, update stok, tambah alat baru, atau hapus data alat yang sudah tidak tersedia.</p>
+                        <p class="text-muted px-3">Atur katalog alat, update stok, tambah alat baru, atau hapus data alat.</p>
                         <a href="kelola_alat.php" class="btn btn-primary btn-menu w-75 shadow-sm">
                             <i class="bi bi-gear-fill me-2"></i>Buka Manajemen
                         </a>
@@ -173,17 +183,49 @@ $total_pinjam = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM p
                             <i class="bi bi-clipboard-check" style="font-size: 3rem;"></i>
                         </div>
                         <h4 class="fw-bold text-dark">Persetujuan & Kembali</h4>
-                        <p class="text-muted px-3">Cek permohonan pinjam user, verifikasi bukti foto kembali, dan berikan denda jika ada kerusakan.</p>
+                        <p class="text-muted px-3">Verifikasi permohonan pinjam dan konfirmasi pengembalian barang user.</p>
                         <a href="konfirmasi_pinjam.php" class="btn btn-warning btn-menu w-75 shadow-sm">
                             <i class="bi bi-check-lg me-2"></i>Buka Konfirmasi
                         </a>
                     </div>
                 </div>
             </div>
+
+            <div class="col-md-6">
+                <div class="card menu-card shadow-sm border-bottom border-success border-4">
+                    <div class="card-body p-4 text-center">
+                        <div class="mb-3 text-success">
+                            <i class="bi bi-printer" style="font-size: 3rem;"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark">Laporan Transaksi</h4>
+                        <p class="text-muted px-3">Cetak rekapitulasi data peminjaman bulanan ke format PDF untuk dosen.</p>
+                        <a href="laporan.php" class="btn btn-success btn-menu w-75 shadow-sm">
+                            <i class="bi bi-file-earmark-pdf me-2"></i>Cetak Laporan
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <?php if($_SESSION['role'] == 'super_admin'): ?>
+            <div class="col-md-6">
+                <div class="card menu-card shadow-sm border-bottom border-info border-4">
+                    <div class="card-body p-4 text-center">
+                        <div class="mb-3 text-info">
+                            <i class="bi bi-tags" style="font-size: 3rem;"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark">Kategori Alat</h4>
+                        <p class="text-muted px-3">Fitur Super Admin: Kelola kategori barang (Kamera, Tenda, Lighting, dll).</p>
+                        <a href="kategori.php" class="btn btn-info text-white btn-menu w-75 shadow-sm">
+                            <i class="bi bi-plus-circle me-2"></i>Kelola Kategori
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
 
     </div>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

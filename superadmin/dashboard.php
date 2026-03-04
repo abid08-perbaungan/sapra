@@ -1,180 +1,88 @@
 <?php 
 include '../config/koneksi.php'; 
-
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
+// Proteksi: Benar-benar CUMA boleh Super Admin
 if($_SESSION['role'] != 'super_admin'){ 
     header("Location: ../index.php"); 
     exit;
 } 
 
-// Ambil data statistik untuk Super Admin
-$count_admin = mysqli_num_rows(mysqli_query($conn, "SELECT id_user FROM users WHERE role='admin'"));
-$count_peminjam = mysqli_num_rows(mysqli_query($conn, "SELECT id_user FROM users WHERE role='peminjam'"));
+// Statistik
+$total_alat = mysqli_num_rows(mysqli_query($conn, "SELECT id_alat FROM alat"));
+$total_user = mysqli_num_rows(mysqli_query($conn, "SELECT id_user FROM users"));
+$total_pinjam = mysqli_num_rows(mysqli_query($conn, "SELECT id_peminjaman FROM peminjaman WHERE status='disetujui'"));
 ?>
 
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Admin Panel - Rental Pro</title>
-    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
-    
     <style>
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #0f172a; /* Deep Navy Dark */
-            color: #f8fafc;
-        }
-
-        .navbar-super {
-            background-color: #1e293b;
-            border-bottom: 1px solid #334155;
-            padding: 1rem 2rem;
-        }
-
-        .hero-section {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            border: 1px solid #334155;
-            border-radius: 24px;
-            padding: 40px;
-            margin-bottom: 40px;
-        }
-
-        .stat-card {
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 20px;
-            padding: 25px;
-            transition: 0.3s ease;
-        }
-
-        .stat-card:hover {
-            border-color: #fbbf24; /* Amber Gold */
-            transform: translateY(-5px);
-        }
-
-        .menu-action-card {
-            background: #1e293b;
-            border: none;
-            border-radius: 24px;
-            overflow: hidden;
-            transition: 0.4s;
-        }
-
-        .menu-action-card:hover {
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            background: #334155;
-        }
-
-        .btn-gold {
-            background-color: #fbbf24;
-            color: #000;
-            font-weight: 800;
-            border-radius: 12px;
-            padding: 12px 30px;
-            border: none;
-        }
-
-        .btn-gold:hover {
-            background-color: #f59e0b;
-            color: #000;
-        }
-
-        .icon-box {
-            width: 60px;
-            height: 60px;
-            background: rgba(251, 191, 36, 0.1);
-            color: #fbbf24;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            margin-bottom: 20px;
-        }
+        body { background-color: #f0f2f5; font-family: 'Inter', sans-serif; }
+        .card-menu { transition: 0.3s; border: none; border-radius: 15px; }
+        .card-menu:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
-
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-super sticky-top">
-        <div class="container">
-            <a class="navbar-brand fw-extrabold d-flex align-items-center" href="#">
-                <i class="bi bi-shield-shaded text-warning me-2"></i> SUPER ADMIN
-            </a>
-            <div class="ms-auto">
-                <a href="../logout.php" class="btn btn-outline-danger btn-sm px-4 fw-bold" style="border-radius: 10px;">
-                    <i class="bi bi-power me-1"></i> Logout
-                </a>
-            </div>
-        </div>
+    <nav class="navbar navbar-dark bg-dark px-4 mb-4">
+        <a class="navbar-brand fw-bold" href="#">SUPER ADMIN PANEL</a>
+        <a href="../logout.php" class="btn btn-outline-danger btn-sm">Logout</a>
     </nav>
 
-    <div class="container py-5">
-        
-        <div class="hero-section shadow-lg">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h5 class="text-warning fw-bold mb-2">SISTEM KENDALI UTAMA</h5>
-                    <h1 class="display-5 fw-bold mb-3">Selamat Datang, Bos <?= $_SESSION['nama'] ?></h1>
-                    <p class="text-secondary fs-5">Anda memiliki otoritas penuh untuk mengatur akses administrator dan memantau seluruh aktivitas pengguna di sistem Rental Pro.</p>
-                </div>
-                <div class="col-md-4 text-center d-none d-md-block">
-                    <i class="bi bi-rocket-takeoff text-warning opacity-50" style="font-size: 8rem;"></i>
-                </div>
-            </div>
+    <div class="container">
+        <div class="alert alert-dark shadow-sm">
+            <h4 class="fw-bold mb-1">Selamat Datang, Master <?= $_SESSION['nama'] ?>!</h4>
+            <p class="mb-0">Anda memiliki akses penuh ke seluruh fitur sistem.</p>
         </div>
 
-        <div class="row mb-5">
-            <div class="col-md-6 mb-4">
-                <div class="stat-card d-flex align-items-center">
-                    <div class="icon-box me-4">
-                        <i class="bi bi-person-gear"></i>
-                    </div>
+        <div class="row g-4 mt-2">
+            <div class="col-md-4">
+                <div class="card card-menu h-100 shadow-sm text-center p-4">
+                    <i class="bi bi-tools text-primary fs-1 mb-2"></i>
+                    <h5 class="fw-bold">Data Alat</h5>
+                    <p class="small text-muted">Manajemen stok dan katalog barang.</p>
+                    <a href="kelola_alat.php" class="btn btn-primary btn-sm mt-auto">Buka</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-menu h-100 shadow-sm text-center p-4 border-bottom border-info border-4">
+                    <i class="bi bi-tags text-info fs-1 mb-2"></i>
+                    <h5 class="fw-bold">Kategori</h5>
+                    <p class="small text-muted">Atur kategori alat (Kamera, Tenda, dll).</p>
+                    <a href="kategori.php" class="btn btn-info text-white btn-sm mt-auto">Buka</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-menu h-100 shadow-sm text-center p-4 border-bottom border-danger border-4">
+                    <i class="bi bi-people text-danger fs-1 mb-2"></i>
+                    <h5 class="fw-bold">Manajemen User</h5>
+                    <p class="small text-muted">Kelola akun Petugas & Peminjam.</p>
+                    <a href="users.php" class="btn btn-danger btn-sm mt-auto">Buka</a>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card card-menu h-100 shadow-sm p-4 d-flex flex-row align-items-center">
+                    <i class="bi bi-check2-circle text-warning fs-1 me-4"></i>
                     <div>
-                        <h2 class="fw-bold mb-0"><?= $count_admin ?></h2>
-                        <span class="text-secondary fw-semibold">Total Staff Admin</span>
+                        <h5 class="fw-bold">Persetujuan & Pengembalian</h5>
+                        <a href="konfirmasi_pinjam.php" class="btn btn-warning btn-sm">Lihat Transaksi</a>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 mb-4">
-                <div class="stat-card d-flex align-items-center">
-                    <div class="icon-box me-4" style="color: #60a5fa; background: rgba(96, 165, 250, 0.1);">
-                        <i class="bi bi-people"></i>
-                    </div>
+            <div class="col-md-6">
+                <div class="card card-menu h-100 shadow-sm p-4 d-flex flex-row align-items-center">
+                    <i class="bi bi-file-earmark-pdf text-success fs-1 me-4"></i>
                     <div>
-                        <h2 class="fw-bold mb-0"><?= $count_peminjam ?></h2>
-                        <span class="text-secondary fw-semibold">Total Member (Peminjam)</span>
+                        <h5 class="fw-bold">Cetak Laporan</h5>
+                        <a href="laporan.php" class="btn btn-success btn-sm">Buka Laporan</a>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="row justify-content-center">
-            <div class="col-lg-6">
-                <div class="card menu-action-card shadow">
-                    <div class="card-body p-5 text-center">
-                        <div class="icon-box mx-auto mb-4" style="width: 80px; height: 80px; font-size: 40px;">
-                            <i class="bi bi-person-plus"></i>
-                        </div>
-                        <h3 class="fw-bold mb-3">Kelola Akun Admin</h3>
-                        <p class="text-secondary mb-4 px-lg-5">
-                            Tambahkan admin baru, nonaktifkan akses, atau ubah kredensial staff operasional Anda.
-                        </p>
-                        <a href="kelola_admin.php" class="btn btn-gold w-100 shadow-lg">
-                            BUKA MANAJEMEN ADMIN <i class="bi bi-arrow-right ms-2"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
